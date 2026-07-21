@@ -10,16 +10,23 @@ class LaporanScreen extends StatefulWidget {
   State<LaporanScreen> createState() => _LaporanScreenState();
 }
 
-class _LaporanScreenState extends State<LaporanScreen> {
+class _LaporanScreenState extends State<LaporanScreen> with SingleTickerProviderStateMixin {
   LaporanKeuangan? _data;
   bool _loading = true;
   String? _error;
-  int _tabIndex = 0;
+  late TabController _tabController;
 
   @override
   void initState() {
     super.initState();
+    _tabController = TabController(length: 4, vsync: this);
     _load();
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
   }
 
   Future<void> _load() async {
@@ -51,106 +58,98 @@ class _LaporanScreenState extends State<LaporanScreen> {
         ],
       ),
       body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : _error != null
-              ? Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(_error!),
-                      FilledButton(onPressed: _load, child: const Text('Coba Lagi')),
-                    ],
-                  ),
-                )
-              : _buildContent(),
+          ? const ShimmerLaporan()
+          : _error != null ? _buildError() : _buildContent(),
+    );
+  }
+
+  Widget _buildError() {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.cloud_off, size: 48, color: Colors.red),
+          const SizedBox(height: 16),
+          Text(_error!, textAlign: TextAlign.center),
+          const SizedBox(height: 16),
+          FilledButton(onPressed: _load, child: const Text('Coba Lagi')),
+        ],
+      ),
     );
   }
 
   Widget _buildContent() {
     return Column(
       children: [
-        // Tab bar
+        // Tab bar — swipeable
         Container(
           color: Colors.white,
-          child: Row(
-            children: [
-              _tabButton('Laba Rugi', 0),
-              _tabButton('Neraca Saldo', 1),
-              _tabButton('Arus Kas', 2),
-              _tabButton('Biaya/Ikan', 3),
+          child: TabBar(
+            controller: _tabController,
+            labelColor: AppColors.primary,
+            unselectedLabelColor: AppColors.textSecondary,
+            indicatorColor: AppColors.primary,
+            indicatorWeight: 3,
+            labelStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+            unselectedLabelStyle: const TextStyle(fontSize: 12),
+            isScrollable: false,
+            tabs: const [
+              Tab(text: 'Laba Rugi'),
+              Tab(text: 'Neraca Saldo'),
+              Tab(text: 'Arus Kas'),
+              Tab(text: 'Biaya/Ikan'),
             ],
           ),
         ),
         const Divider(height: 1),
+        // Content — swipeable
         Expanded(
-          child: RefreshIndicator(
-            onRefresh: _load,
-            child: ListView(
-              padding: const EdgeInsets.all(16),
-              children: _buildTabContent(),
-            ),
+          child: TabBarView(
+            controller: _tabController,
+            children: [
+              _buildLabaRugi(),
+              _buildNeracaSaldo(),
+              _buildArusKas(),
+              _buildBiayaPerIkan(),
+            ],
           ),
         ),
       ],
     );
   }
 
-  Widget _tabButton(String label, int index) {
-    final active = _tabIndex == index;
-    return Expanded(
-      child: GestureDetector(
-        onTap: () => setState(() => _tabIndex = index),
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 14),
-          decoration: BoxDecoration(
-            border: Border(
-              bottom: BorderSide(
-                color: active ? AppColors.primary : Colors.transparent,
-                width: 2.5,
-              ),
-            ),
-          ),
-          child: Text(
-            label,
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: active ? FontWeight.bold : FontWeight.normal,
-              color: active ? AppColors.primary : AppColors.textSecondary,
-            ),
-          ),
-        ),
+  // ==================== LABA RUGI ====================
+  Widget _buildLabaRugi() {
+    final items = _data!.labaRugi;
+    if (items.isEmpty) return const Center(child: Text('Belum ada data'));
+
+    return RefreshIndicator(
+      onRefresh: _load,
+      child: ListView(
+        padding: const EdgeInsets.all(16),
+        children: _buildLabaRugiItems(items),
       ),
     );
   }
 
-  List<Widget> _buildTabContent() {
-    if (_data == null) return [];
-
-    switch (_tabIndex) {
-      case 0:
-        return _buildLabaRugi();
-      case 1:
-        return _buildNeracaSaldo();
-      case 2:
-        return _buildArusKas();
-      case 3:
-        return _buildBiayaPerIkan();
-      default:
-        return [];
-    }
-  }
-
-  List<Widget> _buildLabaRugi() {
-    final items = _data!.labaRugi;
-    if (items.isEmpty) return [const Text('Belum ada data')];
-
+  List<Widget> _buildLabaRugiItems(List<LabaRugiItem> items) {
     final list = <Widget>[];
-    for (final item in items) {
+    int? bebanIndex;
+
+    for (int i = 0; i < items.length; i++) {
+      final item = items[i];
       if (item.label.isEmpty) {
         list.add(const SizedBox(height: 8));
         continue;
       }
+      if (item.label == 'BEBAN') bebanIndex = i;
+
+      // Warna khusus untuk PENDAPATAN, BEBAN, LABA/RUGI
+      Color? textColor;
+      if (item.label == 'PENDAPATAN') textColor = AppColors.primary;
+      if (item.label == 'BEBAN') textColor = AppColors.accent;
+      if (item.label == 'LABA/RUGI BERSIH') textColor = item.jumlah < 0 ? AppColors.negative : AppColors.positive;
+
       list.add(Padding(
         padding: EdgeInsets.symmetric(vertical: item.isTotal ? 8 : 4),
         child: Row(
@@ -161,7 +160,7 @@ class _LaporanScreenState extends State<LaporanScreen> {
                 style: TextStyle(
                   fontSize: item.isTotal ? 15 : 14,
                   fontWeight: item.isTotal ? FontWeight.bold : FontWeight.normal,
-                  color: item.isTotal ? AppColors.textPrimary : AppColors.textSecondary,
+                  color: textColor ?? (item.isTotal ? AppColors.textPrimary : AppColors.textSecondary),
                 ),
               ),
             ),
@@ -170,12 +169,13 @@ class _LaporanScreenState extends State<LaporanScreen> {
               style: TextStyle(
                 fontSize: item.isTotal ? 15 : 14,
                 fontWeight: item.isTotal ? FontWeight.bold : FontWeight.w600,
-                color: item.label.contains('Rugi') && item.jumlah > 0 ? AppColors.negative : null,
+                color: textColor ?? (item.jumlah < 0 ? AppColors.negative : null),
               ),
             ),
           ],
         ),
       ));
+
       if (item.isTotal) {
         list.add(const Divider(thickness: 1.5));
       }
@@ -183,74 +183,107 @@ class _LaporanScreenState extends State<LaporanScreen> {
     return list;
   }
 
-  List<Widget> _buildNeracaSaldo() {
+  // ==================== NERACA SALDO ====================
+  Widget _buildNeracaSaldo() {
     final items = _data!.neracaSaldo;
-    if (items.isEmpty) return [const Text('Belum ada data')];
+    if (items.isEmpty) return const Center(child: Text('Belum ada data'));
 
-    final list = <Widget>[
-      Row(
+    return RefreshIndicator(
+      onRefresh: _load,
+      child: ListView(
+        padding: const EdgeInsets.all(16),
         children: [
-          const Expanded(flex: 2, child: Text('Akun', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
-          const Expanded(flex: 1, child: Text('Debit', textAlign: TextAlign.right, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
-          const Expanded(flex: 1, child: Text('Kredit', textAlign: TextAlign.right, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
+          // Header
+          Container(
+            padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+            decoration: BoxDecoration(
+              color: AppColors.primary.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: const Row(
+              children: [
+                Expanded(flex: 2, child: Text('Akun', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
+                Expanded(flex: 1, child: Text('Debit', textAlign: TextAlign.right, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
+                Expanded(flex: 1, child: Text('Kredit', textAlign: TextAlign.right, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
+              ],
+            ),
+          ),
+          const SizedBox(height: 4),
+          // Items
+          ...items.map((item) => Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: Row(
+              children: [
+                Expanded(
+                  flex: 2,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(item.kode, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12)),
+                      Text(item.namaAkun, style: const TextStyle(fontSize: 12)),
+                    ],
+                  ),
+                ),
+                Expanded(
+                  flex: 1,
+                  child: Text(formatRp(item.debit), textAlign: TextAlign.right,
+                    style: TextStyle(fontSize: 12, color: item.debit > 0 ? AppColors.negative : AppColors.textSecondary)),
+                ),
+                Expanded(
+                  flex: 1,
+                  child: Text(formatRp(item.kredit), textAlign: TextAlign.right,
+                    style: TextStyle(fontSize: 12, color: item.kredit > 0 ? AppColors.positive : AppColors.textSecondary)),
+                ),
+              ],
+            ),
+          )),
+          // Total
+          const Divider(thickness: 1.5),
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 6),
+            child: Row(
+              children: [
+                const Expanded(flex: 2, child: Text('TOTAL', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13))),
+                Expanded(flex: 1, child: Text(formatRp(items.fold(0, (s, i) => s + i.debit)),
+                    textAlign: TextAlign.right, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13))),
+                Expanded(flex: 1, child: Text(formatRp(items.fold(0, (s, i) => s + i.kredit)),
+                    textAlign: TextAlign.right, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13))),
+              ],
+            ),
+          ),
         ],
       ),
-      const Divider(),
-    ];
-
-    for (final item in items) {
-      list.add(Padding(
-        padding: const EdgeInsets.symmetric(vertical: 4),
-        child: Row(
-          children: [
-            Expanded(
-              flex: 2,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(item.kode, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12)),
-                  Text(item.namaAkun, style: const TextStyle(fontSize: 12)),
-                ],
-              ),
-            ),
-            Expanded(
-              flex: 1,
-              child: Text(formatRp(item.debit), textAlign: TextAlign.right, style: TextStyle(fontSize: 12, color: item.debit > 0 ? AppColors.negative : AppColors.textSecondary)),
-            ),
-            Expanded(
-              flex: 1,
-              child: Text(formatRp(item.kredit), textAlign: TextAlign.right, style: TextStyle(fontSize: 12, color: item.kredit > 0 ? AppColors.positive : AppColors.textSecondary)),
-            ),
-          ],
-        ),
-      ));
-    }
-
-    // Total row
-    final totalDebit = items.fold(0, (sum, i) => sum + i.debit);
-    final totalKredit = items.fold(0, (sum, i) => sum + i.kredit);
-    list.add(const Divider());
-    list.add(Row(
-      children: [
-        const Expanded(flex: 2, child: Text('TOTAL', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13))),
-        Expanded(flex: 1, child: Text(formatRp(totalDebit), textAlign: TextAlign.right, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13))),
-        Expanded(flex: 1, child: Text(formatRp(totalKredit), textAlign: TextAlign.right, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13))),
-      ],
-    ));
-
-    return list;
+    );
   }
 
-  List<Widget> _buildArusKas() {
+  // ==================== ARUS KAS ====================
+  Widget _buildArusKas() {
     final items = _data!.arusKas;
-    if (items.isEmpty) return [const Text('Belum ada data')];
+    if (items.isEmpty) return const Center(child: Text('Belum ada data'));
 
+    return RefreshIndicator(
+      onRefresh: _load,
+      child: ListView(
+        padding: const EdgeInsets.all(16),
+        children: _buildArusKasItems(items),
+      ),
+    );
+  }
+
+  List<Widget> _buildArusKasItems(List<ArusKasItem> items) {
     final list = <Widget>[];
     for (final item in items) {
       if (item.label.isEmpty) {
         list.add(const SizedBox(height: 12));
         continue;
       }
+
+      // Warna section header
+      Color? textColor;
+      if (item.label == 'Aktivitas Operasi') textColor = AppColors.primary;
+      if (item.label == 'Aktivitas Investasi') textColor = AppColors.accent;
+      if (item.label == 'Aktivitas Pendanaan') textColor = Colors.blue[700];
+
       list.add(Padding(
         padding: EdgeInsets.symmetric(vertical: item.isTotal ? 6 : 3),
         child: Row(
@@ -261,6 +294,7 @@ class _LaporanScreenState extends State<LaporanScreen> {
                 style: TextStyle(
                   fontSize: item.isTotal ? 15 : 13,
                   fontWeight: item.isTotal ? FontWeight.bold : FontWeight.normal,
+                  color: textColor ?? (item.isTotal ? AppColors.textPrimary : null),
                 ),
               ),
             ),
@@ -275,53 +309,94 @@ class _LaporanScreenState extends State<LaporanScreen> {
           ],
         ),
       ));
-      if (item.isTotal) {
-        list.add(const Divider());
-      }
+      if (item.isTotal) list.add(const Divider());
     }
     return list;
   }
 
-  List<Widget> _buildBiayaPerIkan() {
+  // ==================== BIAYA PER IKAN ====================
+  Widget _buildBiayaPerIkan() {
     final items = _data!.biayaPerIkan;
-    if (items.isEmpty) return [const Text('Belum ada data')];
+    if (items.isEmpty) return const Center(child: Text('Belum ada data'));
 
-    final list = <Widget>[
-      Row(
+    return RefreshIndicator(
+      onRefresh: _load,
+      child: ListView(
+        padding: const EdgeInsets.all(16),
         children: [
-          Expanded(flex: 2, child: Text('Kategori', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
-          Expanded(child: Text('Nila', textAlign: TextAlign.right, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11))),
-          Expanded(child: Text('Gurame', textAlign: TextAlign.right, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11))),
-          Expanded(child: Text('Bawal', textAlign: TextAlign.right, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11))),
-        ],
-      ),
-      const Divider(),
-    ];
-
-    for (final item in items) {
-      final isTotal = item.kategori == 'TOTAL';
-      list.add(Padding(
-        padding: EdgeInsets.symmetric(vertical: isTotal ? 6 : 3),
-        child: Row(
-          children: [
-            Expanded(
-              flex: 2,
-              child: Text(
-                item.kategori,
-                style: TextStyle(
-                  fontSize: isTotal ? 13 : 12,
-                  fontWeight: isTotal ? FontWeight.bold : FontWeight.normal,
-                ),
+          // Header
+          Container(
+            padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+            decoration: BoxDecoration(
+              color: AppColors.primary.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: const Row(
+              children: [
+                Expanded(flex: 2, child: Text('Kategori', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
+                Expanded(child: Text('Nila', textAlign: TextAlign.right, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: AppColors.primary))),
+                Expanded(child: Text('Gurame', textAlign: TextAlign.right, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: AppColors.accent))),
+                Expanded(child: Text('Bawal', textAlign: TextAlign.right, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Colors.blue))),
+              ],
+            ),
+          ),
+          const SizedBox(height: 4),
+          // Items
+          ...items.map((item) {
+            final isTotal = item.kategori == 'TOTAL';
+            return Padding(
+              padding: EdgeInsets.symmetric(vertical: isTotal ? 6 : 3),
+              child: Row(
+                children: [
+                  Expanded(
+                    flex: 2,
+                    child: Text(
+                      item.kategori,
+                      style: TextStyle(
+                        fontSize: isTotal ? 13 : 12,
+                        fontWeight: isTotal ? FontWeight.bold : FontWeight.normal,
+                      ),
+                    ),
+                  ),
+                  Expanded(child: Text(formatRp(item.nila),
+                      textAlign: TextAlign.right,
+                      style: TextStyle(fontSize: isTotal ? 13 : 11,
+                          fontWeight: isTotal ? FontWeight.bold : FontWeight.normal,
+                          color: isTotal ? AppColors.primary : null))),
+                  Expanded(child: Text(formatRp(item.gurame),
+                      textAlign: TextAlign.right,
+                      style: TextStyle(fontSize: isTotal ? 13 : 11,
+                          fontWeight: isTotal ? FontWeight.bold : FontWeight.normal,
+                          color: isTotal ? AppColors.accent : null))),
+                  Expanded(child: Text(formatRp(item.bawal),
+                      textAlign: TextAlign.right,
+                      style: TextStyle(fontSize: isTotal ? 13 : 11,
+                          fontWeight: isTotal ? FontWeight.bold : FontWeight.normal,
+                          color: isTotal ? Colors.blue : null))),
+                ],
+              ),
+            );
+          }),
+          // Total footer
+          if (items.isNotEmpty) ...[
+            const Divider(thickness: 1.5),
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 6),
+              child: Row(
+                children: [
+                  const Expanded(flex: 2, child: Text('GRAND TOTAL', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13))),
+                  Expanded(child: Text(formatRp(items.last.nila), textAlign: TextAlign.right,
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13))),
+                  Expanded(child: Text(formatRp(items.last.gurame), textAlign: TextAlign.right,
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13))),
+                  Expanded(child: Text(formatRp(items.last.bawal), textAlign: TextAlign.right,
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13))),
+                ],
               ),
             ),
-            Expanded(child: Text(formatRp(item.nila), textAlign: TextAlign.right, style: TextStyle(fontSize: isTotal ? 13 : 11, fontWeight: isTotal ? FontWeight.bold : FontWeight.normal))),
-            Expanded(child: Text(formatRp(item.gurame), textAlign: TextAlign.right, style: TextStyle(fontSize: isTotal ? 13 : 11, fontWeight: isTotal ? FontWeight.bold : FontWeight.normal))),
-            Expanded(child: Text(formatRp(item.bawal), textAlign: TextAlign.right, style: TextStyle(fontSize: isTotal ? 13 : 11, fontWeight: isTotal ? FontWeight.bold : FontWeight.normal))),
           ],
-        ),
-      ));
-      if (isTotal) list.add(const Divider());
-    }
-    return list;
+        ],
+      ),
+    );
   }
 }

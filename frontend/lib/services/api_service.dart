@@ -4,8 +4,8 @@ import 'package:http/http.dart' as http;
 import '../models/models.dart';
 
 class ApiService {
-  /// URL backend setelah deploy ke Render.
-  static const String baseUrl = "https://jagofarm-api.onrender.com";
+  /// URL backend setelah deploy ke Vercel.
+  static const String baseUrl = "https://jagofarm-api.vercel.app";
 
   /// HTTP client dengan timeout panjang (Render free cold start)
   static final http.Client _client = http.Client();

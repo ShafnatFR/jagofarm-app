@@ -49,27 +49,199 @@ class InfoCard extends StatelessWidget {
   }
 }
 
-/// Loading shimmer placeholder
-class ShimmerBox extends StatelessWidget {
+/// ============================================================
+/// SKELETON SHIMMER — animasi loading seperti placeholder
+/// ============================================================
+class ShimmerWidget extends StatefulWidget {
   final double width;
   final double height;
-  final double radius;
+  final double borderRadius;
 
-  const ShimmerBox({
+  const ShimmerWidget({
     super.key,
     this.width = double.infinity,
     this.height = 16,
-    this.radius = 4,
+    this.borderRadius = 4,
   });
 
   @override
+  State<ShimmerWidget> createState() => _ShimmerWidgetState();
+}
+
+class _ShimmerWidgetState extends State<ShimmerWidget>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _animation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    )..repeat(reverse: true);
+    _animation = Tween<double>(begin: 0.08, end: 0.3).animate(_controller);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return Container(
-      width: width,
-      height: height,
-      decoration: BoxDecoration(
-        color: Colors.grey[300],
-        borderRadius: BorderRadius.circular(radius),
+    return AnimatedBuilder(
+      animation: _animation,
+      builder: (_, __) => Container(
+        width: widget.width,
+        height: widget.height,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(widget.borderRadius),
+          color: Colors.grey.withValues(alpha: _animation.value),
+        ),
+      ),
+    );
+  }
+}
+
+/// Skeleton untuk dashboard ringkasan (4 shimmer card)
+class ShimmerDashboard extends StatelessWidget {
+  const ShimmerDashboard({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const Padding(
+      padding: EdgeInsets.all(16),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Expanded(child: _ShimmerCard()),
+              SizedBox(width: 12),
+              Expanded(child: _ShimmerCard()),
+            ],
+          ),
+          SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(child: _ShimmerCard()),
+              SizedBox(width: 12),
+              Expanded(child: _ShimmerCard()),
+            ],
+          ),
+          SizedBox(height: 24),
+          ShimmerWidget(height: 220, borderRadius: 12),
+          SizedBox(height: 16),
+          ShimmerWidget(height: 14),
+          SizedBox(height: 8),
+          ShimmerWidget(height: 14, width: 150),
+        ],
+      ),
+    );
+  }
+}
+
+class _ShimmerCard extends StatelessWidget {
+  const _ShimmerCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return const InfoCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          ShimmerWidget(width: 80, height: 12),
+          SizedBox(height: 10),
+          ShimmerWidget(width: 120, height: 22),
+        ],
+      ),
+    );
+  }
+}
+
+/// Skeleton untuk transaksi (5 baris card)
+class ShimmerTransaksi extends StatelessWidget {
+  const ShimmerTransaksi({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const Padding(
+      padding: EdgeInsets.all(12),
+      child: Column(
+        children: [
+          _ShimmerTransaksiCard(),
+          _ShimmerTransaksiCard(),
+          _ShimmerTransaksiCard(),
+          _ShimmerTransaksiCard(),
+          _ShimmerTransaksiCard(),
+        ],
+      ),
+    );
+  }
+}
+
+class _ShimmerTransaksiCard extends StatelessWidget {
+  const _ShimmerTransaksiCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Padding(
+      padding: EdgeInsets.only(bottom: 10),
+      child: InfoCard(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                ShimmerWidget(width: 80, height: 20, borderRadius: 6),
+                ShimmerWidget(width: 50, height: 20, borderRadius: 6),
+              ],
+            ),
+            SizedBox(height: 10),
+            ShimmerWidget(height: 16),
+            SizedBox(height: 6),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                ShimmerWidget(width: 180, height: 12),
+                ShimmerWidget(width: 80, height: 16),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Skeleton untuk laporan (tab content)
+class ShimmerLaporan extends StatelessWidget {
+  const ShimmerLaporan({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const Padding(
+      padding: EdgeInsets.all(16),
+      child: Column(
+        children: [
+          ShimmerWidget(height: 16),
+          SizedBox(height: 8),
+          ShimmerWidget(height: 14),
+          SizedBox(height: 6),
+          ShimmerWidget(height: 14),
+          SizedBox(height: 6),
+          ShimmerWidget(height: 14, width: 200),
+          SizedBox(height: 20),
+          ShimmerWidget(height: 16),
+          SizedBox(height: 8),
+          ShimmerWidget(height: 14, width: 180),
+          SizedBox(height: 20),
+          ShimmerWidget(height: 16),
+          SizedBox(height: 8),
+          ShimmerWidget(height: 14, width: 120),
+        ],
       ),
     );
   }
