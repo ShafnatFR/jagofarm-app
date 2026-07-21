@@ -6,7 +6,7 @@ from google.oauth2.credentials import Credentials
 from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
 
-app = FastAPI(title="JagoFarm API", version="1.0.2")
+app = FastAPI(title="JagoFarm API", version="1.0.3")
 
 class CORSHeaders(BaseHTTPMiddleware):
     async def dispatch(self, request, call_next):
@@ -43,21 +43,24 @@ def read_range(range_name):
     ).execute()
     return result.get("values", [])
 
+def write_range(range_name, values, mode="USER_ENTERED"):
+    sheet = get_sheets()
+    body = {"values": values, "majorDimension": "ROWS"}
+    result = sheet.spreadsheets().values().update(
+        spreadsheetId=SPREADSHEET_ID, range=range_name,
+        valueInputOption=mode, body=body
+    ).execute()
+    return result.get("updatedCells", 0)
+
 def parse_rp(val):
     if val is None: return 0
-    # If already a number, return directly
     if isinstance(val, (int, float)):
         return int(val)
     s = str(val).strip()
     if not s: return 0
-    # Remove "Rp" prefix
     s = s.replace("Rp","").replace("rp","").strip()
-    # Indonesia format uses comma as decimal: "1.234.567,89"
-    # Split by comma, take integer part only
     s = s.split(",")[0]
-    # Remove dots (thousand separator)
     s = s.replace(".","")
-    # Keep only digits
     s = re.sub(r"[^\d\-]", "", s)
     try: return int(s)
     except: return 0
@@ -65,9 +68,9 @@ def parse_rp(val):
 @app.get("/api/health")
 def health():
     return {"status":"ok","spreadsheet":"JagoFarmV2"}
+
 @app.get("/api/ringkasan")
 def ringkasan():
-    # Label di kolom A (A2:A5), value di kolom B (B2:B5)
     rows = read_range("'Dashboard'!A2:B5")
     r = {"total_modal":0,"total_pengeluaran":0,"saldo_kas":0,"jumlah_ikan":0}
     for row in rows:
@@ -82,7 +85,6 @@ def ringkasan():
 
 @app.get("/api/ringkasan-biaya")
 def ringkasan_biaya():
-    # Kategori di kolom A, jumlah di B, proporsi di C
     rows = read_range("'Dashboard'!A10:C18")
     items = []
     for r in rows:
@@ -146,3 +148,93 @@ def laporan_keuangan():
     bp = [{"kategori":str(r[0]).strip(),"nila":parse_rp(r[1]) if len(r)>1 else 0,"gurame":parse_rp(r[2]) if len(r)>2 else 0,"bawal":parse_rp(r[3]) if len(r)>3 else 0,"total":parse_rp(r[4]) if len(r)>4 else 0} for r in read_range("'Biaya Per Ikan'!A2:E10") if len(r)>=2 and str(r[0]).strip()]
     nc = [{"label":str(r[0]).strip(),"jumlah":parse_rp(r[1]) if len(r)>1 else 0,"is_total":str(r[2]).strip().lower()=="total" if len(r)>2 else False,"side":str(r[3]).strip() if len(r)>3 else ""} for r in read_range("'Neraca'!A2:C20") if len(r)>=1 and str(r[0]).strip()]
     return {"laba_rugi":lr,"neraca":nc,"arus_kas":ak,"biaya_per_ikan":bp,"neraca_saldo":ns}
+
+@app.post("/api/auto-journal")
+def auto_journal():
+    """
+    Read Input Transaksi -> Jurnal Umum
+    Auto-generate double-entry journal entries for un-posted transactions
+    """
+    # 1) Read all transactions from Input Transaksi (header row 1, data from row 2)
+    tx_rows = read_range("'Input Transaksi'!A2:I1005")
+    transaksi = []
+    for r in tx_rows:
+        if len(r) >= 1 and str(r[0]).strip():
+            transaksi.append({
+                "tanggal": str(r[0]).strip(),
+                "keterangan": str(r[1]).strip() if len(r) > 1 else "",
+                "akun_debit": str(r[2]).strip() if len(r) > 2 else "",
+                "akun_kredit": str(r[3]).strip() if len(r) > 3 else "",
+                "nominal": str(r[4]).strip() if len(r) > 4 else "0",
+            })
+
+    # 2) Read existing journal entries
+    jurnal_rows = read_range("'Jurnal Umum'!A2:F1000")
+    existing_count = len(jurnal_rows)
+
+    # 3) Each transaction = 2 journal rows (Debit + Credit)
+    # So if we have N transactions, we need 2*N journal rows
+    # existing_count // 2 = number of already-journaled transactions
+    already_journalled = existing_count // 2
+
+    if already_journalled >= len(transaksi):
+        return {"status": "ok", "message": "Semua transaksi sudah tercatat di Jurnal Umum", "new_entries": 0}
+
+    # 4) Find highest existing journal number
+    last_no = 0
+    for r in jurnal_rows:
+        if len(r) >= 1 and str(r[0]).strip().isdigit():
+            last_no = max(last_no, int(str(r[0]).strip()))
+
+    # 5) Generate new journal entries
+    new_entries = []
+    for i in range(already_journalled, len(transaksi)):
+        t = transaksi[i]
+        last_no += 1
+        # Row 1: Debit side
+        new_entries.append([
+            str(last_no),
+            t["tanggal"],
+            t["akun_debit"],
+            t["akun_kredit"],
+            t["nominal"],
+            ""
+        ])
+        last_no += 1
+        # Row 2: Credit side
+        new_entries.append([
+            str(last_no),
+            t["tanggal"],
+            t["akun_kredit"],
+            t["akun_debit"],
+            "",
+            t["nominal"]
+        ])
+
+    # 6) Write to Jurnal Umum
+    start_row = existing_count + 2  # +2 because: A2 is first data row, header is A1
+    end_row = start_row + len(new_entries) - 1
+    range_name = f"'Jurnal Umum'!A{start_row}:F{end_row}"
+
+    cells = write_range(range_name, new_entries)
+
+    details = []
+    for i, t in enumerate(transaksi[already_journalled:]):
+        details.append({
+            "no": (already_journalled + i + 1),
+            "tanggal": t["tanggal"],
+            "keterangan": t["keterangan"],
+            "debit": t["akun_debit"],
+            "kredit": t["akun_kredit"],
+            "nominal": t["nominal"]
+        })
+
+    return {
+        "status": "ok",
+        "message": f"Berhasil menjurnal {len(new_entries) // 2} transaksi baru ({len(new_entries)} baris)",
+        "new_entries": len(new_entries) // 2,
+        "start_row": start_row,
+        "end_row": end_row,
+        "updated_cells": cells,
+        "details": details
+    }
