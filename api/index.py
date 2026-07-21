@@ -84,7 +84,7 @@ def ringkasan_biaya():
     rows = read_range("'Dashboard'!A7:C12")
     items = []
     for r in rows:
-        if len(r)>=2 and str(r[0]).strip() and str(r[0]).strip() not in ("Jumlah", ""):
+        if len(r)>=2 and str(r[0]).strip() and str(r[0]).strip() not in ("Jumlah", "Kategori", ""):
             items.append({"kategori":str(r[0]).strip(),"jumlah":parse_rp(r[1]) if len(r)>1 else 0,"proporsi":str(r[2]).strip() if len(r)>2 else ""})
     return items
 
