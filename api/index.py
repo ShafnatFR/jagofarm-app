@@ -106,11 +106,7 @@ def waterfall_kas():
     for r in rows:
         if len(r) >= 1 and str(r[0]).strip() and str(r[0]).strip() not in ("Tahap", ""):
             val = str(r[1]).strip() if len(r)>1 else "0"
-            # Handle negative values like "-Rp185.000,00"
-            neg = val.startswith("-")
-            num = parse_rp(val)
-            if neg: num = -num
-            items.append({"tahap": str(r[0]).strip(), "nominal": num})
+            items.append({"tahap": str(r[0]).strip(), "nominal": parse_rp(val)})
     return items
 
 @app.get("/api/neraca")
