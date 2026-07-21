@@ -65,9 +65,8 @@ def health():
 
 @app.get("/api/ringkasan")
 def ringkasan():
-    rows = read_range("'Dashboard'!B2:E5")
-    # Debug raw data
-    print("DEBUG Dashboard rows:", json.dumps(rows))
+    # Label di kolom A (A2:A5), value di kolom B (B2:B5)
+    rows = read_range("'Dashboard'!A2:B5")
     r = {"total_modal":0,"total_pengeluaran":0,"saldo_kas":0,"jumlah_ikan":0}
     for row in rows:
         if len(row)<2: continue
@@ -81,10 +80,11 @@ def ringkasan():
 
 @app.get("/api/ringkasan-biaya")
 def ringkasan_biaya():
-    rows = read_range("'Dashboard'!B7:C12")
+    # Kategori di kolom A, jumlah di B, proporsi di C
+    rows = read_range("'Dashboard'!A7:C12")
     items = []
     for r in rows:
-        if len(r)>=1 and str(r[0]).strip():
+        if len(r)>=2 and str(r[0]).strip() and str(r[0]).strip() not in ("Jumlah", ""):
             items.append({"kategori":str(r[0]).strip(),"jumlah":parse_rp(r[1]) if len(r)>1 else 0,"proporsi":str(r[2]).strip() if len(r)>2 else ""})
     return items
 
