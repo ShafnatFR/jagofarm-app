@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: jagofarm-api
+    runtime: python
+    region: singapore
+    plan: free
+    buildCommand: pip install -r backend/requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    workingDir: /backend
+    envVars:
+      - key: GOOGLE_TOKEN_JSON
+        sync: false
