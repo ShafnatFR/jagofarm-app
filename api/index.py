@@ -66,6 +66,8 @@ def health():
 @app.get("/api/ringkasan")
 def ringkasan():
     rows = read_range("'Dashboard'!B2:E5")
+    # Debug raw data
+    print("DEBUG Dashboard rows:", json.dumps(rows))
     r = {"total_modal":0,"total_pengeluaran":0,"saldo_kas":0,"jumlah_ikan":0}
     for row in rows:
         if len(row)<2: continue
