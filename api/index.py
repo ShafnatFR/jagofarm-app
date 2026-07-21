@@ -91,6 +91,39 @@ def ringkasan_biaya():
             items.append({"kategori":str(r[0]).strip(),"jumlah":parse_rp(r[1]) if len(r)>1 else 0,"proporsi":str(r[2]).strip() if len(r)>2 else ""})
     return items
 
+@app.get("/api/biaya-per-ekor")
+def biaya_per_ekor():
+    rows = read_range("'Dashboard'!A48:E52")
+    items = []
+    for r in rows:
+        if len(r) >= 2 and str(r[0]).strip() and str(r[0]).strip() not in ("Ikan", ""):
+            items.append({"ikan": str(r[0]).strip(), "total": parse_rp(r[1]) if len(r)>1 else 0, "ekor": parse_rp(r[2]) if len(r)>2 else 0, "per_ekor": parse_rp(r[3]) if len(r)>3 else 0, "label": str(r[0]).strip()})
+    return items
+
+@app.get("/api/waterfall-kas")
+def waterfall_kas():
+    rows = read_range("'Dashboard'!A40:B47")
+    items = []
+    for r in rows:
+        if len(r) >= 1 and str(r[0]).strip() and str(r[0]).strip() not in ("Tahap", ""):
+            val = str(r[1]).strip() if len(r)>1 else "0"
+            # Handle negative values like "-Rp185.000,00"
+            neg = val.startswith("-")
+            num = parse_rp(val)
+            if neg: num = -num
+            items.append({"tahap": str(r[0]).strip(), "nominal": num})
+    return items
+
+@app.get("/api/neraca")
+def neraca():
+    rows = read_range("'Neraca'!A2:D20")
+    items = []
+    for r in rows:
+        if len(r) >= 1 and str(r[0]).strip():
+            val2 = parse_rp(r[1]) if len(r)>1 else 0
+            items.append({"label": str(r[0]).strip(), "jumlah": val2, "is_total": "total" in str(r[0]).strip().lower(), "side": "aset"})
+    return items
+
 @app.get("/api/transaksi")
 def get_transaksi(limit:int=50, offset:int=0):
     rows = read_range("'Input Transaksi'!A2:I500")
