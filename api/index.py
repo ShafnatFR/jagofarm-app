@@ -65,7 +65,6 @@ def parse_rp(val):
 @app.get("/api/health")
 def health():
     return {"status":"ok","spreadsheet":"JagoFarmV2"}
-
 @app.get("/api/ringkasan")
 def ringkasan():
     # Label di kolom A (A2:A5), value di kolom B (B2:B5)
@@ -84,7 +83,7 @@ def ringkasan():
 @app.get("/api/ringkasan-biaya")
 def ringkasan_biaya():
     # Kategori di kolom A, jumlah di B, proporsi di C
-    rows = read_range("'Dashboard'!A7:C12")
+    rows = read_range("'Dashboard'!A10:C18")
     items = []
     for r in rows:
         if len(r)>=2 and str(r[0]).strip() and str(r[0]).strip() not in ("Jumlah", "Kategori", ""):
