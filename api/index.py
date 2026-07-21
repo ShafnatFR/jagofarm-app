@@ -191,13 +191,16 @@ def auto_journal():
     for i in range(already_journalled, len(transaksi)):
         t = transaksi[i]
         last_no += 1
+        # Parse nominal to number (remove "Rp", dots, comma)
+        nominal_str = t["nominal"]
+        nominal_num = parse_rp(nominal_str)
         # Row 1: Debit side
         new_entries.append([
             str(last_no),
             t["tanggal"],
             t["akun_debit"],
             t["akun_kredit"],
-            t["nominal"],
+            nominal_num,  # Number, not string!
             ""
         ])
         last_no += 1
@@ -208,11 +211,11 @@ def auto_journal():
             t["akun_kredit"],
             t["akun_debit"],
             "",
-            t["nominal"]
+            nominal_num  # Number, not string!
         ])
 
     # 6) Write to Jurnal Umum
-    start_row = existing_count + 2  # +2 because: A2 is first data row, header is A1
+    start_row = existing_count + 2  # +2 because: header is row 1
     end_row = start_row + len(new_entries) - 1
     range_name = f"'Jurnal Umum'!A{start_row}:F{end_row}"
 
@@ -220,13 +223,14 @@ def auto_journal():
 
     details = []
     for i, t in enumerate(transaksi[already_journalled:]):
+        nominal_num = parse_rp(t["nominal"])
         details.append({
             "no": (already_journalled + i + 1),
             "tanggal": t["tanggal"],
             "keterangan": t["keterangan"],
             "debit": t["akun_debit"],
             "kredit": t["akun_kredit"],
-            "nominal": t["nominal"]
+            "nominal": nominal_num
         })
 
     return {
@@ -238,3 +242,35 @@ def auto_journal():
         "updated_cells": cells,
         "details": details
     }
+
+@app.post("/api/auto-journal/fix-format")
+def fix_journal_format():
+    """Fix journal entries that have text-formatted numbers like 'Rp 85.000,00' instead of raw numbers"""
+    jurnal_rows = read_range("'Jurnal Umum'!A2:F1000")
+    updated = 0
+    new_data = []
+    for ri, r in enumerate(jurnal_rows):
+        row = list(r)
+        changed = False
+        # Column E (index 4) = Debit
+        if len(row) > 4 and row[4]:
+            val = row[4]
+            if isinstance(val, str) and ("Rp" in val or "." in val):
+                num = parse_rp(val)
+                row[4] = num
+                changed = True
+        # Column F (index 5) = Kredit
+        if len(row) > 5 and row[5]:
+            val = row[5]
+            if isinstance(val, str) and ("Rp" in val or "." in val):
+                num = parse_rp(val)
+                row[5] = num
+                changed = True
+        if changed:
+            updated += 1
+        new_data.append(row)
+
+    if updated > 0:
+        write_range("'Jurnal Umum'!A2:F1001", new_data)
+    
+    return {"status": "ok", "message": f"Memperbaiki {updated} baris jurnal (text->number)", "fixed_rows": updated}
