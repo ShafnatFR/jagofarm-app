@@ -1,0 +1,6 @@
+frontend
+.git
+node_modules
+.vscode
+*.pyc
+__pycache__
