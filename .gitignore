@@ -17,12 +17,15 @@ frontend/android/local.properties
 frontend/ios/Pods/
 frontend/ios/.symlinks/
 frontend/macos/Pods/
-frontend/linux/flutter/ephemeral/
+
+# Node
+node_modules/
 
 # IDE
 .idea/
-*.iml
 .vscode/
+*.swp
+*.swo
 
 # OS
 .DS_Store
@@ -32,3 +35,7 @@ Thumbs.db
 .env
 *.env.local
 render_payload.json
+
+# Vercel
+.now/
+.vercel/
