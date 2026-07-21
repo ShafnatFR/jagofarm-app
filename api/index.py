@@ -42,9 +42,19 @@ def read_range(range_name):
 
 def parse_rp(val):
     if val is None: return 0
+    # If already a number, return directly
+    if isinstance(val, (int, float)):
+        return int(val)
     s = str(val).strip()
     if not s: return 0
-    s = s.replace("Rp","").replace("rp","").replace(" ","").replace(",","")
+    # Remove "Rp" prefix
+    s = s.replace("Rp","").replace("rp","").strip()
+    # Indonesia format uses comma as decimal: "1.234.567,89"
+    # Split by comma, take integer part only
+    s = s.split(",")[0]
+    # Remove dots (thousand separator)
+    s = s.replace(".","")
+    # Keep only digits
     s = re.sub(r"[^\d\-]", "", s)
     try: return int(s)
     except: return 0
